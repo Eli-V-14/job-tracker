@@ -1,0 +1,204 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Job Tracker</title>
+    <style>
+        :root {
+            --bg: #f5f6f8;
+            --card: #ffffff;
+            --text: #1f2933;
+            --muted: #6b7280;
+            --border: #e5e7eb;
+            --accent: #2563eb;
+            --danger: #dc2626;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            padding: 32px 16px;
+            background: var(--bg);
+            color: var(--text);
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        }
+        .container { max-width: 1100px; margin: 0 auto; }
+        h1 { margin: 0 0 4px; }
+        .subtitle { color: var(--muted); margin: 0 0 24px; }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        h2 { font-size: 1.1rem; margin: 0 0 14px; }
+
+        /* add form */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+        }
+        input, select, button {
+            font: inherit;
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+        button { cursor: pointer; background: var(--card); }
+        .primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+        .danger { color: var(--danger); }
+
+        /* status summary */
+        .summary { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+        .stat {
+            flex: 1 1 120px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 16px;
+            text-decoration: none;
+            color: var(--text);
+        }
+        .stat.active { outline: 2px solid var(--accent); }
+        .stat .number { font-size: 1.6rem; font-weight: 700; }
+        .stat .label { color: var(--muted); text-transform: capitalize; }
+
+        /* table */
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        th { color: var(--muted); font-size: 0.85rem; text-transform: uppercase; }
+        .description { color: var(--muted); font-size: 0.9rem; }
+        .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+        .actions form { display: flex; gap: 6px; margin: 0; }
+        .empty { color: var(--muted); text-align: center; padding: 24px; }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+        .badge.applied { background: #dbeafe; color: #1e40af; }
+        .badge.interviewing { background: #fef3c7; color: #92400e; }
+        .badge.offer { background: #dcfce7; color: #166534; }
+        .badge.rejected { background: #fee2e2; color: #991b1b; }
+
+        /* stats dashboard (data comes from the stats microservice) */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+        .stats-grid .number { font-size: 1.4rem; font-weight: 700; }
+        .stats-grid .label { color: var(--muted); font-size: 0.9rem; }
+        .unavailable { color: var(--muted); font-style: italic; margin: 0; }
+        .service-tag { color: var(--muted); font-size: 0.8rem; font-weight: 400; }
+
+        footer { color: var(--muted); font-size: 0.85rem; text-align: center; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Job Tracker</h1>
+    <p class="subtitle">Log your job applications and track where each one stands.</p>
+
+    <div class="summary">
+        <a class="stat {% if not selected %}active{% endif %}" href="/">
+            <div class="number">{{ counts.values() | sum }}</div>
+            <div class="label">All</div>
+        </a>
+        {% for status in statuses %}
+        <a class="stat {% if selected == status %}active{% endif %}" href="/?status={{ status }}">
+            <div class="number">{{ counts[status] }}</div>
+            <div class="label">{{ status }}</div>
+        </a>
+        {% endfor %}
+    </div>
+
+    <div class="card">
+        <h2>Job Search Stats <span class="service-tag">from the stats service</span></h2>
+        {% if stats %}
+        <div class="stats-grid">
+            <div><div class="number">{{ stats.total }}</div><div class="label">Total applications</div></div>
+            <div><div class="number">{{ stats.this_week }}</div><div class="label">Applied this week</div></div>
+            <div><div class="number">{{ stats.response_rate }}%</div><div class="label">Response rate</div></div>
+            <div><div class="number">{{ stats.offer_rate }}%</div><div class="label">Offer rate</div></div>
+            <div><div class="number">${{ "{:,}".format(stats.avg_salary_min) }} &ndash; ${{ "{:,}".format(stats.avg_salary_max) }}</div><div class="label">Average salary range</div></div>
+        </div>
+        {% else %}
+        <p class="unavailable">Stats service is unavailable. Everything else still works.</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h2>Add Job Application</h2>
+        <form method="post" action="/applications" class="form-grid">
+            <input name="company_name" placeholder="Company Name" required>
+            <input name="job_title" placeholder="Job Title" required>
+            <input name="company_description" placeholder="Company Description">
+            <input name="salary_min" type="number" min="0" placeholder="Minimum Salary" required>
+            <input name="salary_max" type="number" min="0" placeholder="Maximum Salary" required>
+            <input name="date_applied" type="date" required>
+            <button type="submit" class="primary">Add Application</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Applications{% if selected %} &middot; <span style="text-transform: capitalize">{{ selected }}</span>{% endif %}</h2>
+        <div class="table-wrap">
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>Company</th>
+                    <th>Job Title</th>
+                    <th>Salary Range</th>
+                    <th>Date Applied</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+                {% for application_id, application in apps.items() %}
+                <tr>
+                    <td>{{ application_id }}</td>
+                    <td>
+                        <strong>{{ application.company_name }}</strong>
+                        {% if application.company_description %}
+                        <div class="description">{{ application.company_description }}</div>
+                        {% endif %}
+                    </td>
+                    <td>{{ application.job_title }}</td>
+                    <td>${{ "{:,}".format(application.salary_min | int) }} &ndash; ${{ "{:,}".format(application.salary_max | int) }}</td>
+                    <td>{{ application.date_applied }}</td>
+                    <td><span class="badge {{ application.status }}">{{ application.status }}</span></td>
+                    <td>
+                        <div class="actions">
+                            <form method="post" action="/applications/{{ application_id }}/status">
+                                <select name="status">
+                                    {% for status in statuses %}
+                                    <option value="{{ status }}" {% if status == application.status %}selected{% endif %}>{{ status }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit">Update</button>
+                            </form>
+                            <form method="post" action="/applications/{{ application_id }}/delete"
+                                  onsubmit="return confirm('Delete this application?');">
+                                <button type="submit" class="danger">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="empty">No applications yet. Add one above.</td></tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+
+    <footer>Served by pod <strong>{{ pod }}</strong></footer>
+</div>
+</body>
+</html>

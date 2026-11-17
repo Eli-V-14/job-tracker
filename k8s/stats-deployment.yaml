@@ -17,6 +17,15 @@ spec:
           image: us-central1-docker.pkg.dev/gke-flask-kubernetes/job-tracker/stats:v1
           ports:
             - containerPort: 5000
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
           env:
             - name: REDIS_HOST
               value: redis
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: job-tracker-keys
+                  key: API_KEY

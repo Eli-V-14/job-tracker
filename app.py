@@ -17,6 +17,18 @@ def count_request():
     rule = request.url_rule.rule if request.url_rule else 'unknown'
     r.hincrby('usage:tracker', f'{request.method} {rule}', 1)
 
+# keys come from environment variables (a Kubernetes Secret when deployed); the defaults are for local testing only
+API_KEY = os.environ.get('API_KEY', 'dev-api-key')
+ADMIN_KEY = os.environ.get('ADMIN_KEY', 'dev-admin-key')
+
+
+@app.before_request
+def check_access():
+    if request.path.startswith('/api/') and request.headers.get('X-API-Key') != API_KEY:
+        return {'error': 'invalid or missing API key'}, 401
+    if request.path.startswith('/admin/') and request.headers.get('X-Admin-Key') != ADMIN_KEY:
+        return {'error': 'invalid or missing admin key'}, 401
+
 STATUSES = ['applied', 'interviewing', 'offer', 'rejected']
 
 # the stats microservice; "stats" is its service name in Docker Compose and Kubernetes
@@ -26,7 +38,8 @@ STATS_URL = os.environ.get('STATS_URL', 'http://localhost:5000')
 def get_stats():
     # if the stats service is down, return None so the tracker page still works without it
     try:
-        with urllib.request.urlopen(f'{STATS_URL}/stats', timeout=2) as response:
+        stats_request = urllib.request.Request(f'{STATS_URL}/stats', headers={'X-API-Key': API_KEY})
+        with urllib.request.urlopen(stats_request, timeout=2) as response:
             return json.load(response)
     except Exception:
         return None

@@ -6,6 +6,8 @@ services:
     environment:
       - REDIS_HOST=redis
       - STATS_URL=http://stats:5000
+      - API_KEY=dev-api-key
+      - ADMIN_KEY=dev-admin-key
     depends_on:
       - redis
       - stats
@@ -14,6 +16,7 @@ services:
     build: ./stats
     environment:
       - REDIS_HOST=redis
+      - API_KEY=dev-api-key
     depends_on:
       - redis
 

@@ -14,6 +14,14 @@ def count_request():
     rule = request.url_rule.rule if request.url_rule else 'unknown'
     r.hincrby('usage:stats', f'{request.method} {rule}', 1)
 
+API_KEY = os.environ.get('API_KEY', 'dev-api-key')
+
+
+@app.before_request
+def check_access():
+    if request.path != '/health' and request.headers.get('X-API-Key') != API_KEY:
+        return {'error': 'invalid or missing API key'}, 401
+
 def load_applications():
     last_id = int(r.get('next_id') or 0)
     applications = []

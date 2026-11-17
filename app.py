@@ -81,3 +81,64 @@ def delete_application(application_id):
 def health():
     r.ping()  # raises an error (500) if Redis is unreachable
     return {'status': 'ok'}
+
+# ---------- REST API ----------
+
+FIELDS = ['company_name', 'company_description', 'job_title', 'salary_min', 'salary_max', 'date_applied']
+REQUIRED = ['company_name', 'job_title', 'salary_min', 'salary_max', 'date_applied']
+
+
+@app.route('/api/applications', methods=['GET'])
+def api_list_applications():
+    last_id = int(r.get('next_id') or 0)
+    result = []
+    for application_id in range(1, last_id + 1):
+        application = r.hgetall(f'application:{application_id}')
+        if application:
+            result.append({'id': application_id, **application})
+    return result
+
+
+@app.route('/api/applications', methods=['POST'])
+def api_create_application():
+    data = request.get_json(silent=True) or {}
+    missing = [field for field in REQUIRED if not data.get(field)]
+    if missing:
+        return {'error': f'missing fields: {", ".join(missing)}'}, 400
+
+    application_id = r.incr('next_id')
+    application = {field: str(data.get(field, '')) for field in FIELDS}
+    application['status'] = 'applied'
+    r.hset(f'application:{application_id}', mapping=application)
+    return {'id': application_id, **application}, 201
+
+
+@app.route('/api/applications/<int:application_id>', methods=['GET'])
+def api_get_application(application_id):
+    application = r.hgetall(f'application:{application_id}')
+    if not application:
+        return {'error': 'application not found'}, 404
+    return {'id': application_id, **application}
+
+
+@app.route('/api/applications/<int:application_id>', methods=['PUT'])
+def api_update_application(application_id):
+    key = f'application:{application_id}'
+    if not r.exists(key):
+        return {'error': 'application not found'}, 404
+
+    data = request.get_json(silent=True) or {}
+    if 'status' in data and data['status'] not in STATUSES:
+        return {'error': f'status must be one of: {", ".join(STATUSES)}'}, 400
+
+    updates = {field: str(data[field]) for field in FIELDS + ['status'] if field in data}
+    if updates:
+        r.hset(key, mapping=updates)
+    return {'id': application_id, **r.hgetall(key)}
+
+
+@app.route('/api/applications/<int:application_id>', methods=['DELETE'])
+def api_delete_application(application_id):
+    if not r.delete(f'application:{application_id}'):
+        return {'error': 'application not found'}, 404
+    return '', 204

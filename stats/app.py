@@ -2,13 +2,17 @@ import os
 from datetime import date, timedelta
 
 import redis
-from flask import Flask
+from flask import Flask, request
 
 app = Flask(__name__)
 
 # same Redis the tracker writes to; REDIS_HOST is "redis" in Docker Compose and Kubernetes
 r = redis.Redis(host=os.environ.get('REDIS_HOST', 'localhost'), port=6379, decode_responses=True)
 
+@app.before_request
+def count_request():
+    rule = request.url_rule.rule if request.url_rule else 'unknown'
+    r.hincrby('usage:stats', f'{request.method} {rule}', 1)
 
 def load_applications():
     last_id = int(r.get('next_id') or 0)

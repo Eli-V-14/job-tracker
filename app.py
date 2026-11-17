@@ -11,6 +11,12 @@ app = Flask(__name__)
 # REDIS_HOST is "redis" in Docker Compose and Kubernetes (the service name), localhost otherwise
 r = redis.Redis(host=os.environ.get('REDIS_HOST', 'localhost'), port=6379, decode_responses=True)
 
+@app.before_request
+def count_request():
+    # one counter per endpoint, e.g. "GET /api/applications/<int:application_id>"
+    rule = request.url_rule.rule if request.url_rule else 'unknown'
+    r.hincrby('usage:tracker', f'{request.method} {rule}', 1)
+
 STATUSES = ['applied', 'interviewing', 'offer', 'rejected']
 
 # the stats microservice; "stats" is its service name in Docker Compose and Kubernetes
@@ -142,3 +148,14 @@ def api_delete_application(application_id):
     if not r.delete(f'application:{application_id}'):
         return {'error': 'application not found'}, 404
     return '', 204
+
+
+# ---------- Admin ----------
+
+@app.route('/admin/usage')
+def admin_usage():
+    # both services write their counters to the shared Redis, so one endpoint can report them all
+    return {
+        service: {endpoint: int(count) for endpoint, count in r.hgetall(f'usage:{service}').items()}
+        for service in ('tracker', 'stats')
+    }
